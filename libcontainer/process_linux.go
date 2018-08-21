@@ -18,6 +18,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/sirupsen/logrus"
 
 	"golang.org/x/sys/unix"
 )
@@ -77,6 +78,7 @@ func (p *setnsProcess) start() (err error) {
 	if err != nil {
 		return newSystemErrorWithCause(err, "starting setns process")
 	}
+	logrus.Debugf("Child command started setnsProcess: %#v", p.cmd)
 	if p.bootstrapData != nil {
 		if _, err := io.Copy(p.parentPipe, p.bootstrapData); err != nil {
 			return newSystemErrorWithCause(err, "copying bootstrap data to pipe")
@@ -126,7 +128,11 @@ func (p *setnsProcess) start() (err error) {
 	}
 	// Must be done after Shutdown so the child will exit and we can wait for it.
 	if ierr != nil {
-		p.wait()
+		state, err := p.wait()
+		if err != nil {
+			logrus.Debugf("Parent waited for child. Wait exited with error %s", err.Error())
+		}
+		logrus.Debugf("Parent waited for child. Child exited %s", state.String())
 		return ierr
 	}
 	return nil
@@ -272,6 +278,8 @@ func (p *initProcess) start() error {
 		p.process.ops = nil
 		return newSystemErrorWithCause(err, "starting init process command")
 	}
+
+	logrus.Debugf("InitProcess command successfully started %#v", p)
 	// Do this before syncing with child so that no children can escape the
 	// cgroup. We don't need to worry about not doing this and not being root
 	// because we'd be using the rootless cgroup manager in that case.
@@ -323,19 +331,23 @@ func (p *initProcess) start() error {
 	ierr := parseSync(p.parentPipe, func(sync *syncT) error {
 		switch sync.Type {
 		case procReady:
+			logrus.Debugf("InitProcess parseSync entering procReady case")
 			// set rlimits, this has to be done here because we lose permissions
 			// to raise the limits once we enter a user-namespace
 			if err := setupRlimits(p.config.Rlimits, p.pid()); err != nil {
+				logrus.Debugf("InitProcess parseSync failed to setupRlimits")
 				return newSystemErrorWithCause(err, "setting rlimits for ready process")
 			}
 			// call prestart hooks
 			if !p.config.Config.Namespaces.Contains(configs.NEWNS) {
 				// Setup cgroup before prestart hook, so that the prestart hook could apply cgroup permissions.
 				if err := p.manager.Set(p.config.Config); err != nil {
+					logrus.Debugf("InitProcess parseSync failed to setupRlimits")
 					return newSystemErrorWithCause(err, "setting cgroup config for ready process")
 				}
 				if p.intelRdtManager != nil {
 					if err := p.intelRdtManager.Set(p.config.Config); err != nil {
+						logrus.Debugf("InitProcess parseSync failed to set intelRdtManager")
 						return newSystemErrorWithCause(err, "setting Intel RDT config for ready process")
 					}
 				}
@@ -351,6 +363,7 @@ func (p *initProcess) start() error {
 					}
 					for i, hook := range p.config.Config.Hooks.Prestart {
 						if err := hook.Run(s); err != nil {
+							logrus.Debugf("InitProcess parseSync hook failed to run: %#v", hook)
 							return newSystemErrorWithCausef(err, "running prestart hook %d", i)
 						}
 					}
@@ -358,10 +371,12 @@ func (p *initProcess) start() error {
 			}
 			// Sync with child.
 			if err := writeSync(p.parentPipe, procRun); err != nil {
+				logrus.Debugf("InitProcess parseSync failed to write to syncT 'run'")
 				return newSystemErrorWithCause(err, "writing syncT 'run'")
 			}
 			sentRun = true
 		case procHooks:
+			logrus.Debugf("InitProcess parseSync enterd procHooks case")
 			// Setup cgroup before prestart hook, so that the prestart hook could apply cgroup permissions.
 			if err := p.manager.Set(p.config.Config); err != nil {
 				return newSystemErrorWithCause(err, "setting cgroup config for procHooks process")
@@ -392,6 +407,7 @@ func (p *initProcess) start() error {
 			}
 			sentResume = true
 		default:
+			logrus.Debugf("InitProcess parseSync fell through to default case")
 			return newSystemError(fmt.Errorf("invalid JSON payload from child"))
 		}
 

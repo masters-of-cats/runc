@@ -19,6 +19,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/intelrdt"
 	"github.com/opencontainers/runc/libcontainer/mount"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/sirupsen/logrus"
 
 	"golang.org/x/sys/unix"
 )
@@ -141,6 +142,7 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 		Validator: validate.New(),
 		CriuPath:  "criu",
 	}
+	logrus.Debugf("Child factory new: %#v", l)
 	Cgroupfs(l)
 	for _, opt := range options {
 		if opt == nil {
@@ -314,11 +316,15 @@ func (l *LinuxFactory) StartInitialization() (err error) {
 	defer func() {
 		// We have an error during the initialization of the container's init,
 		// send it back to the parent process in the form of an initError.
+		logrus.Debugf("Child about to send syncT error: %s", err.Error())
 		if werr := utils.WriteJSON(pipe, syncT{procError}); werr != nil {
+			logrus.Debugf("Child write to pipe error: %s", werr.Error())
 			fmt.Fprintln(os.Stderr, err)
 			return
 		}
+		logrus.Debugf("Child about to send the system error %s", err.Error())
 		if werr := utils.WriteJSON(pipe, newSystemError(err)); werr != nil {
+			logrus.Debugf("Child write to pipe error for system: %s", werr.Error())
 			fmt.Fprintln(os.Stderr, err)
 			return
 		}

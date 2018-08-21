@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/sirupsen/logrus"
 )
 
 type syncType string
@@ -85,6 +86,7 @@ func parseSync(pipe io.Reader, fn func(*syncT) error) error {
 			}
 			return err
 		}
+		logrus.Debugf("Received message from child: %#v", sync)
 
 		// We handle this case outside fn for cleanliness reasons.
 		var ierr *genericError
@@ -99,6 +101,7 @@ func parseSync(pipe io.Reader, fn func(*syncT) error) error {
 			panic("No error following JSON procError payload.")
 		}
 
+		logrus.Debugf("Non-error message about to be dispatched: %#v", sync)
 		if err := fn(&sync); err != nil {
 			return err
 		}

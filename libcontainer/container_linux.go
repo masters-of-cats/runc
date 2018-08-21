@@ -328,6 +328,7 @@ func (c *linuxContainer) start(process *Process) error {
 	if err != nil {
 		return newSystemErrorWithCause(err, "creating new parent process")
 	}
+	logrus.Debugf("Ran a runc start with process: %#v", process)
 	if err := parent.start(); err != nil {
 		// terminate the process to ensure that it properly is reaped.
 		if err := ignoreTerminateErrors(parent.terminate()); err != nil {
