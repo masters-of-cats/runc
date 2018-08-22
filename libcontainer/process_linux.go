@@ -88,6 +88,7 @@ func (p *setnsProcess) start() (err error) {
 		return newSystemErrorWithCause(err, "executing setns process")
 	}
 	if len(p.cgroupPaths) > 0 {
+		logrus.Debugf("setnsProcess entire p: %#v", *p)
 		if err := cgroups.EnterPid(p.cgroupPaths, p.pid()); err != nil {
 			return newSystemErrorWithCausef(err, "adding pid %d to cgroups", p.pid())
 		}

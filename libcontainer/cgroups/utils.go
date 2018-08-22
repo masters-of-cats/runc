@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -357,8 +358,10 @@ func PathExists(path string) bool {
 }
 
 func EnterPid(cgroupPaths map[string]string, pid int) error {
+	logrus.Debugf("EnterPid ranging over process cgroupPaths %#v", cgroupPaths)
 	for _, path := range cgroupPaths {
 		if PathExists(path) {
+			logrus.Debugf("EnterPid cgroupPath exists %s", path)
 			if err := WriteCgroupProc(path, pid); err != nil {
 				return err
 			}
@@ -454,7 +457,14 @@ func WriteCgroupProc(dir string, pid int) error {
 
 	// Dont attach any pid to the cgroup if -1 is specified as a pid
 	if pid != -1 {
+		cgroupProcContents, err := ioutil.ReadFile(filepath.Join(dir, CgroupProcesses))
+		if err != nil {
+			logrus.Debugf("Failed to read from cgrouProcFile %s/%s: %s", dir, CgroupProcesses, err.Error())
+		} else {
+			logrus.Debugf("Current cgroup procfile %s contents: %s", filepath.Join(dir, CgroupProcesses), string(cgroupProcContents))
+		}
 		if err := ioutil.WriteFile(filepath.Join(dir, CgroupProcesses), []byte(strconv.Itoa(pid)), 0700); err != nil {
+			logrus.Debugf("failed to write to cgroup: dir: %v, CgroupProcesses: %v, pid: %v, as string: %v", dir, CgroupProcesses, pid, strconv.Itoa(pid))
 			return fmt.Errorf("failed to write %v to %v: %v", pid, CgroupProcesses, err)
 		}
 	}
