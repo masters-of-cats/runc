@@ -8,13 +8,16 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/docker/go-units"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -362,6 +365,7 @@ func EnterPid(cgroupPaths map[string]string, pid int) error {
 	for _, path := range cgroupPaths {
 		if PathExists(path) {
 			logrus.Debugf("EnterPid cgroupPath exists %s", path)
+			logProcessDebugInfo(pid)
 			if err := WriteCgroupProc(path, pid); err != nil {
 				return err
 			}
@@ -469,4 +473,56 @@ func WriteCgroupProc(dir string, pid int) error {
 		}
 	}
 	return nil
+}
+
+func logProcessDebugInfo(pid int) {
+	logrus.Debugf("Logging debug info for process with pid %d", pid)
+	affinitySyscall, err := getAffinityViaSyscall(uintptr(pid))
+	if err != nil {
+		logrus.Debugf("Failed to get affinity via syscall for process with puid %d: %v", pid, err)
+	} else {
+		logrus.Debugf("Affinity of process with pid %d (retrieved via syscall): %v", pid, affinitySyscall)
+	}
+
+	affinityTaskset, err := getAffinityViaTaskset(pid)
+	if err != nil {
+		logrus.Debugf("Failed to get affinity via taskset for process with puid %d: %v", pid, err)
+	} else {
+		logrus.Debugf("Affinity of process with pid %d (retrieved via taskset): %v", pid, affinityTaskset)
+	}
+}
+
+// ***** Some affinity trickery from https://github.com/golang/go/issues/11243#issuecomment-114330148
+const ptrSize = 4 << (^uintptr(0) >> 63) // unsafe.Sizeof(uintptr(0)) but an ideal const
+
+// GetAffinity return cpu list of pid
+func getAffinityViaSyscall(pid uintptr) ([]int, error) {
+	var mask [1024 / 64]uintptr
+	var ret = make([]int, 0)
+	// size of uintptr is 8, in amd64
+	v1, _, err := unix.RawSyscall(unix.SYS_SCHED_GETAFFINITY, pid, uintptr(len(mask)*8), uintptr(unsafe.Pointer(&mask[0])))
+	if err != 0 {
+		return ret, err
+	}
+	nmask := mask[:v1/ptrSize]
+	idx := 0
+	for _, v := range nmask {
+		for i := 0; i < 64; i++ {
+			ct := int32(v & 1)
+			v >>= 1
+			if ct > 0 {
+				ret = append(ret, idx)
+			}
+			idx++
+		}
+	}
+	return ret, nil
+}
+
+// ***** End of trickery
+
+func getAffinityViaTaskset(pid int) (string, error) {
+	cmd := exec.Command("taskset", "-p", strconv.Itoa(pid))
+	output, err := cmd.CombinedOutput()
+	return string(output), err
 }
