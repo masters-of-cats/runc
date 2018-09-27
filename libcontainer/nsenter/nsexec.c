@@ -766,7 +766,7 @@ void nsexec(void)
 			 * We need to send both back because we can't reap the first child we created (CLONE_PARENT).
 			 * It becomes the responsibility of our parent to reap the first child.
 			 */
-			len = snprintf(buf, JSON_MAX, "{\"pid\": %d, \"pid_first\": %d}\n", child, first_child);
+			len = snprintf(buf, JSON_MAX, "{\"pid\": %d, \"pid_first\": %d}", child, first_child);
 			if (len < 0) {
 				kill(child, SIGKILL);
 				bail("unable to generate JSON for child pid");
