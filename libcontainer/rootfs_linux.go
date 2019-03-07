@@ -337,7 +337,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string, enableCgroupns b
 					Device:      "cgroup",
 					Destination: subsystemPath,
 					Flags:       flags,
-					Data:        filepath.Base(subsystemPath),
+					Data:        b.Data,
 				}
 				if err := mountNewCgroup(cgroupmount); err != nil {
 					return err
@@ -420,6 +420,7 @@ func getCgroupMounts(m *configs.Mount) ([]*configs.Mount, error) {
 			Destination:      filepath.Join(m.Destination, filepath.Base(mm.Mountpoint)),
 			Flags:            unix.MS_BIND | unix.MS_REC | m.Flags,
 			PropagationFlags: m.PropagationFlags,
+			Data:             strings.Join(mm.Subsystems, ","),
 		})
 	}
 
