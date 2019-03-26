@@ -20,19 +20,7 @@ func forwardLogs(p *os.File) {
 	dec := json.NewDecoder(p)
 	for {
 		var jl jsonLog
-
-		type logFuncTable map[logrus.Level]func(args ...interface{})
-		logMapping := logFuncTable{
-			logrus.PanicLevel: logrus.Panic,
-			logrus.FatalLevel: logrus.Fatal,
-			logrus.ErrorLevel: logrus.Error,
-			logrus.WarnLevel:  logrus.Warn,
-			logrus.InfoLevel:  logrus.Info,
-			logrus.DebugLevel: logrus.Debug,
-		}
-
-		err := dec.Decode(&jl)
-		if err != nil {
+		if err := dec.Decode(&jl); err != nil {
 			if err == io.EOF {
 				logrus.Debug("child pipe closed")
 				return
@@ -45,26 +33,27 @@ func forwardLogs(p *os.File) {
 		if err != nil {
 			fmt.Printf("parsing error\n")
 		}
-		if logMapping[lvl] != nil {
-			logMapping[lvl](jl.Msg)
-		}
+		logFunc(lvl)(jl.Msg)
 	}
 }
 
-func rawLogs(p *os.File) {
-	defer p.Close()
-
-	data := make([]byte, 128)
-	for {
-		_, err := p.Read(data)
-
-		if err != nil {
-			if err == io.EOF {
-				logrus.Debug("child pipe closed")
-				return
-			}
-			return
+func logFunc(level logrus.Level) func(args ...interface{}) {
+	switch level {
+	case logrus.PanicLevel:
+		return logrus.Panic
+	case logrus.FatalLevel:
+		return logrus.Fatal
+	case logrus.ErrorLevel:
+		return logrus.Error
+	case logrus.WarnLevel:
+		return logrus.Warn
+	case logrus.InfoLevel:
+		return logrus.Info
+	case logrus.DebugLevel:
+		return logrus.Debug
+	default:
+		return func(args ...interface{}) {
+			fmt.Fprint(os.Stderr, args)
 		}
-		fmt.Printf("Read data: %s\n", string(data))
 	}
 }

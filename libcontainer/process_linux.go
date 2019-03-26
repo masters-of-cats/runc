@@ -48,7 +48,7 @@ type parentProcess interface {
 
 	setExternalDescriptors(fds []string)
 
-	getChildLogs()
+	forwardChildLogs()
 }
 
 type pipePair struct {
@@ -215,7 +215,7 @@ func (p *setnsProcess) setExternalDescriptors(newFds []string) {
 	p.fds = newFds
 }
 
-func (p *setnsProcess) getChildLogs() {
+func (p *setnsProcess) forwardChildLogs() {
 	go forwardLogs(p.logPipe.r)
 }
 
@@ -525,7 +525,7 @@ func (p *initProcess) setExternalDescriptors(newFds []string) {
 	p.fds = newFds
 }
 
-func (p *initProcess) getChildLogs() {
+func (p *initProcess) forwardChildLogs() {
 	go forwardLogs(p.logPipe.r)
 }
 
