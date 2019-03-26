@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/opencontainers/runc/libcontainer/logs"
 	"io"
 	"os"
 	"os/exec"
@@ -216,7 +217,7 @@ func (p *setnsProcess) setExternalDescriptors(newFds []string) {
 }
 
 func (p *setnsProcess) forwardChildLogs() {
-	go forwardLogs(p.logPipe.r)
+	go logs.ForwardLogs(p.logPipe.r)
 }
 
 type initProcess struct {
@@ -526,7 +527,7 @@ func (p *initProcess) setExternalDescriptors(newFds []string) {
 }
 
 func (p *initProcess) forwardChildLogs() {
-	go forwardLogs(p.logPipe.r)
+	go logs.ForwardLogs(p.logPipe.r)
 }
 
 func getPipeFds(pid int) ([]string, error) {
