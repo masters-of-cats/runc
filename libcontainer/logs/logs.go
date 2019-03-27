@@ -45,28 +45,26 @@ func ForwardLogs(p *os.File) {
 		if err != nil {
 			fmt.Printf("parsing error\n")
 		}
-		logFunc(lvl)(jl.Msg)
+		log(lvl, jl.Msg)
 	}
 }
 
-func logFunc(level logrus.Level) func(args ...interface{}) {
+func log(level logrus.Level, args ...interface{}) {
 	switch level {
 	case logrus.PanicLevel:
-		return logrus.Panic
+		logrus.Panic(args...)
 	case logrus.FatalLevel:
-		return logrus.Fatal
+		logrus.Fatal(args...)
 	case logrus.ErrorLevel:
-		return logrus.Error
+		logrus.Error(args...)
 	case logrus.WarnLevel:
-		return logrus.Warn
+		logrus.Warn(args...)
 	case logrus.InfoLevel:
-		return logrus.Info
+		logrus.Info(args...)
 	case logrus.DebugLevel:
-		return logrus.Debug
+		logrus.Debug(args...)
 	default:
-		return func(args ...interface{}) {
-			fmt.Fprint(os.Stderr, args)
-		}
+		logrus.Warnf("Unsupported log level %v while trying to log '%#v'", level, args)
 	}
 }
 
