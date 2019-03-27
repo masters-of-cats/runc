@@ -38,12 +38,13 @@ func ForwardLogs(p *os.File) {
 				return
 			}
 			logrus.Errorf("json logs decoding error: %+v", err)
-			return
+			continue
 		}
 
 		lvl, err := logrus.ParseLevel(jl.Level)
 		if err != nil {
-			fmt.Printf("parsing error\n")
+			logrus.Errorf("failed to parse log level '%s': %v\n", jl.Level, err)
+			continue
 		}
 		log(lvl, jl.Msg)
 	}
