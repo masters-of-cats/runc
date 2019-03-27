@@ -71,11 +71,11 @@ func log(level logrus.Level, args ...interface{}) {
 
 func ConfigureLogging(loggingConfig *LoggingConfiguration) error {
 	if loggingConfigured {
-		logrus.Error("logging has been configured already")
+		logrus.Debug("logging has been already configured")
 		return nil
 	}
 
-	configureDebugLevel(loggingConfig)
+	configureLogLevel(loggingConfig)
 	if err := configureLogOutput(loggingConfig); err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func ConfigureLogging(loggingConfig *LoggingConfiguration) error {
 	return nil
 }
 
-func configureDebugLevel(loggingConfig *LoggingConfiguration) {
+func configureLogLevel(loggingConfig *LoggingConfiguration) {
 	if loggingConfig.IsDebug {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
@@ -101,17 +101,17 @@ func configureLogOutput(loggingConfig *LoggingConfiguration) error {
 	if loggingConfig.LogPipeFd != "" {
 		logPipeFdInt, err := strconv.Atoi(loggingConfig.LogPipeFd)
 		if err != nil {
-			return fmt.Errorf("failed to convert _LIBCONTAINER_LOGPIPE environment variable value %s to int: %v", loggingConfig.LogPipeFd, err)
+			return fmt.Errorf("failed to convert _LIBCONTAINER_LOGPIPE environment variable value %q to int: %v", loggingConfig.LogPipeFd, err)
 		}
-		return configureLogPipeOutput(logPipeFdInt)
+		configureLogPipeOutput(logPipeFdInt)
+		return nil
 	}
 
 	return nil
 }
 
-func configureLogPipeOutput(logPipeFd int) error {
+func configureLogPipeOutput(logPipeFd int) {
 	logrus.SetOutput(os.NewFile(uintptr(logPipeFd), "logpipe"))
-	return nil
 }
 
 func configureLogFileOutput(logFilePath string) error {
