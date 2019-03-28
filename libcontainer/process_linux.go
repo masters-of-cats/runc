@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/opencontainers/runc/libcontainer/logs"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"syscall" // only for Signal
+
+	"github.com/opencontainers/runc/libcontainer/logs"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -52,7 +53,7 @@ type parentProcess interface {
 	forwardChildLogs()
 }
 
-type pipePair struct {
+type readWritePair struct {
 	r *os.File
 	w *os.File
 }
@@ -61,7 +62,7 @@ type setnsProcess struct {
 	cmd             *exec.Cmd
 	parentPipe      *os.File
 	childPipe       *os.File
-	logPipe         pipePair
+	logPipe         readWritePair
 	cgroupPaths     map[string]string
 	rootlessCgroups bool
 	intelRdtPath    string
@@ -224,7 +225,7 @@ type initProcess struct {
 	cmd             *exec.Cmd
 	parentPipe      *os.File
 	childPipe       *os.File
-	logPipe         pipePair
+	logPipe         readWritePair
 	config          *initConfig
 	manager         cgroups.Manager
 	intelRdtManager intelrdt.Manager

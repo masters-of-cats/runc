@@ -585,20 +585,6 @@ void write_log(loglevel_t level, const char *format, ...)
 	write(logfd, jsonbuffer, len);
 }
 
-/* void write_log_withpid(loglevel_t level, const char *format, ...) */
-/* { */
-/* 	static char logbuffer[1024]; */
-/*   int len = snprintf(logbuffer, sizeof(logbuffer), "pid %d: %%s", getpid()); */
-/*  */
-/* 	#<{(| va_list args; |)}># */
-/* 	#<{(| va_start(args, format); |)}># */
-/* 	#<{(| len += vsnprintf(&logbuffer[len], sizeof(logbuffer) - len, format, args); |)}># */
-/* 	#<{(| va_end(args); |)}># */
-/*  */
-/* 	#<{(| write_log(level, logbuffer); |)}># */
-/* 	write_log(level, format); */
-/* } */
-
 void nsexec(void)
 {
 	int pipenum;
@@ -625,7 +611,6 @@ void nsexec(void)
 	/* Get the log pipe */
 	logfd = logpipe();
 
-	/* write_log_withpid(DEBUG, "%s started", __FUNCTION__); */
 	write_log(DEBUG, "%s started", __FUNCTION__);
 
 	/* Parse all of the netlink configuration. */
@@ -1153,6 +1138,3 @@ void nsexec(void)
 	/* Should never be reached. */
 	bail("should never be reached");
 }
-
-// AllowDouble(phoneBook).To(ReceiveCallTo("GetPhoneNumber")).With(foo, bar).AndReturn("blah")
-// When(phoneBook.GetPhoneNumber("Tom")).ThenReturn("345-123-789")

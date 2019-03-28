@@ -21,9 +21,7 @@ type LoggingConfiguration struct {
 	LogPipeFd   string
 }
 
-func ForwardLogs(p *os.File) {
-	defer p.Close()
-
+func ForwardLogs(p io.Reader) {
 	type jsonLog struct {
 		Level string `json:"level"`
 		Msg   string `json:"msg"`
