@@ -1,6 +1,7 @@
 package logs
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,24 +28,32 @@ func ForwardLogs(p io.Reader) {
 		Msg   string `json:"msg"`
 	}
 
-	dec := json.NewDecoder(p)
+	scanner := bufio.NewScanner(p)
 	for {
-		var jl jsonLog
-		if err := dec.Decode(&jl); err != nil {
+		if scanner.Scan() {
+			var jl jsonLog
+			text := scanner.Text()
+			if err := json.Unmarshal([]byte(text), &jl); err != nil {
+				logrus.Errorf("failed to decode %q to json: %+v", text, err)
+				continue
+			}
+
+			lvl, err := logrus.ParseLevel(jl.Level)
+			if err != nil {
+				logrus.Errorf("failed to parse log level %q: %v\n", jl.Level, err)
+				continue
+			}
+			log(lvl, jl.Msg)
+		}
+
+		if err := scanner.Err(); err != nil {
 			if err == io.EOF {
 				logrus.Debug("child pipe closed")
 				return
 			}
-			logrus.Errorf("json logs decoding error: %+v", err)
+			logrus.Errorf("scanner read error: %+v", err)
 			continue
 		}
-
-		lvl, err := logrus.ParseLevel(jl.Level)
-		if err != nil {
-			logrus.Errorf("failed to parse log level '%s': %v\n", jl.Level, err)
-			continue
-		}
-		log(lvl, jl.Msg)
 	}
 }
 
@@ -113,7 +122,7 @@ func configureLogPipeOutput(logPipeFd int) {
 }
 
 func configureLogFileOutput(logFilePath string) error {
-	f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0666)
+	f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0644)
 	if err != nil {
 		return err
 	}

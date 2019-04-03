@@ -69,7 +69,7 @@ unittest: runcimage
 	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localunittest TESTFLAGS=${TESTFLAGS}
 
 localunittest: all
-	$(GO) test -timeout 3m -tags "$(BUILDTAGS)" -run TestLog* -v $(allpackages)
+	$(GO) test -timeout 3m -tags "$(BUILDTAGS)" ${TESTFLAGS} -v $(allpackages)
 
 integration: runcimage
 	docker run ${DOCKER_RUN_PROXY} -t --privileged --rm -v /lib/modules:/lib/modules:ro -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localintegration TESTPATH=${TESTPATH}

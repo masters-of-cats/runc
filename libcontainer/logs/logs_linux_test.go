@@ -2,7 +2,6 @@ package logs
 
 import (
 	"errors"
-	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -11,20 +10,17 @@ import (
 )
 
 var (
-	logFile *os.File
-	logR    io.Reader
-	logW    io.WriteCloser
+	logFile string
+	logR    *os.File
+	logW    *os.File
 )
 
 func TestLoggingToFile(t *testing.T) {
 	runLogForwarding(t)
-	defer os.Remove(logFile.Name())
+	defer os.Remove(logFile)
 	defer logW.Close()
 
-	_, err := logW.Write([]byte(`{"level": "info","msg":"kitten"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
+	logToLogWriter(t, `{"level": "info","msg":"kitten"}`)
 
 	logFileContent := waitForLogContent(t)
 	if !strings.Contains(string(logFileContent), "kitten") {
@@ -32,34 +28,54 @@ func TestLoggingToFile(t *testing.T) {
 	}
 }
 
-func TestLogForwardingDoesNotStopOnDecodeErr(t *testing.T) {
+func TestLogForwardingDoesNotStopOnJsonDecodeErr(t *testing.T) {
 	runLogForwarding(t)
-	defer os.Remove(logFile.Name())
+	defer os.Remove(logFile)
 	defer logW.Close()
 
-	_, err := logW.Write([]byte("kitten\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	logToLogWriter(t, "invalid-json-with-kitten")
 
 	logFileContent := waitForLogContent(t)
-	if !strings.Contains(string(logFileContent), "json logs decoding error") {
+	if !strings.Contains(string(logFileContent), "failed to decode") {
 		t.Fatalf("%q does not contain decoding error", string(logFileContent))
 	}
 
-	err = logFile.Truncate(0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	truncateLogFile(t)
 
-	_, err = logW.Write([]byte(`{"level": "info","msg":"puppy"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
+	logToLogWriter(t, `{"level": "info","msg":"puppy"}`)
 
 	logFileContent = waitForLogContent(t)
 	if !strings.Contains(string(logFileContent), "puppy") {
 		t.Fatalf("%s does not contain puppy", string(logFileContent))
+	}
+}
+
+func TestLogForwardingDoesNotStopOnLogLevelParsingErr(t *testing.T) {
+	runLogForwarding(t)
+	defer os.Remove(logFile)
+	defer logW.Close()
+
+	logToLogWriter(t, `{"level": "alert","msg":"puppy"}`)
+
+	logFileContent := waitForLogContent(t)
+	if !strings.Contains(string(logFileContent), "failed to parse log level") {
+		t.Fatalf("%q does not contain log level parsing error", string(logFileContent))
+	}
+
+	truncateLogFile(t)
+
+	logToLogWriter(t, `{"level": "info","msg":"puppy"}`)
+
+	logFileContent = waitForLogContent(t)
+	if !strings.Contains(string(logFileContent), "puppy") {
+		t.Fatalf("%s does not contain puppy", string(logFileContent))
+	}
+}
+
+func logToLogWriter(t *testing.T, message string) {
+	_, err := logW.Write([]byte(message + "\n"))
+	if err != nil {
+		t.Fatalf("failed to write %q to log writer: %v", message, err)
 	}
 }
 
@@ -71,12 +87,13 @@ func runLogForwarding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	logFile, err = ioutil.TempFile("", "")
+	tempFile, err := ioutil.TempFile("", "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	logFile = tempFile.Name()
 
-	logConfig := &LoggingConfiguration{LogFormat: "json", LogFilePath: logFile.Name()}
+	logConfig := &LoggingConfiguration{LogFormat: "json", LogFilePath: logFile}
 	startLogForwarding(t, logConfig)
 }
 
@@ -99,7 +116,7 @@ func waitForLogContent(t *testing.T) string {
 			break
 		}
 
-		fileContent, err := ioutil.ReadAll(logFile)
+		fileContent, err := ioutil.ReadFile(logFile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -110,4 +127,18 @@ func waitForLogContent(t *testing.T) string {
 	}
 
 	return ""
+}
+
+func truncateLogFile(t *testing.T) {
+	file, err := os.OpenFile(logFile, os.O_RDWR, 0666)
+	if err != nil {
+		t.Fatalf("failed to open log file: %v", err)
+		return
+	}
+	defer file.Close()
+
+	err = file.Truncate(0)
+	if err != nil {
+		t.Fatalf("failed to truncate log file: %v", err)
+	}
 }
