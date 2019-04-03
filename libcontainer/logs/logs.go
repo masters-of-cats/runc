@@ -44,16 +44,16 @@ func ForwardLogs(p io.Reader) {
 				continue
 			}
 			log(lvl, jl.Msg)
+			continue
 		}
 
 		if err := scanner.Err(); err != nil {
-			if err == io.EOF {
-				logrus.Debug("child pipe closed")
-				return
-			}
 			logrus.Errorf("scanner read error: %+v", err)
 			continue
 		}
+
+		logrus.Debug("child pipe closed")
+		return
 	}
 }
 

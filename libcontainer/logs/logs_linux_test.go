@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	logFile string
-	logR    *os.File
-	logW    *os.File
+	logFile           string
+	logR              *os.File
+	logW              *os.File
+	forwardingRunning bool
 )
 
 func TestLoggingToFile(t *testing.T) {
@@ -72,6 +73,20 @@ func TestLogForwardingDoesNotStopOnLogLevelParsingErr(t *testing.T) {
 	}
 }
 
+func TestLogForwardingStopsAfterClosingTheWriter(t *testing.T) {
+	runLogForwarding(t)
+	defer os.Remove(logFile)
+
+	time.Sleep(3 * time.Second)
+
+	logW.Close()
+	time.Sleep(3 * time.Second)
+
+	if forwardingRunning {
+		t.Fatal("Log forwarding is still running")
+	}
+}
+
 func logToLogWriter(t *testing.T, message string) {
 	_, err := logW.Write([]byte(message + "\n"))
 	if err != nil {
@@ -102,8 +117,10 @@ func startLogForwarding(t *testing.T, logConfig *LoggingConfiguration) {
 	if err := ConfigureLogging(logConfig); err != nil {
 		t.Fatal(err)
 	}
+	forwardingRunning = true
 	go func() {
 		ForwardLogs(logR)
+		forwardingRunning = false
 	}()
 }
 
