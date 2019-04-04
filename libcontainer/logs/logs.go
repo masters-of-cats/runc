@@ -22,39 +22,46 @@ type LoggingConfiguration struct {
 	LogPipeFd   string
 }
 
-func ForwardLogs(p io.Reader) {
+func ForwardLogs(logPipe io.Reader) {
 	type jsonLog struct {
 		Level string `json:"level"`
 		Msg   string `json:"msg"`
 	}
 
-	scanner := bufio.NewScanner(p)
+	lineReader := bufio.NewReader(logPipe)
 	for {
-		if scanner.Scan() {
-			var jl jsonLog
-			text := scanner.Text()
-			if err := json.Unmarshal([]byte(text), &jl); err != nil {
-				logrus.Errorf("failed to decode %q to json: %+v", text, err)
-				continue
-			}
-
-			lvl, err := logrus.ParseLevel(jl.Level)
-			if err != nil {
-				logrus.Errorf("failed to parse log level %q: %v\n", jl.Level, err)
-				continue
-			}
-			log(lvl, jl.Msg)
-			continue
+		line, err := lineReader.ReadBytes('\n')
+		if len(line) > 0 {
+			processEntry(line)
 		}
-
-		if err := scanner.Err(); err != nil {
-			logrus.Errorf("scanner read error: %+v", err)
-			continue
+		if err == io.EOF {
+			logrus.Debugf("log pipe has been closed: %+v", err)
+			return
 		}
+		if err != nil {
+			logrus.Errorf("log pipe read error: %+v", err)
+		}
+	}
+}
 
-		logrus.Debug("child pipe closed")
+func processEntry(text []byte) {
+	type jsonLog struct {
+		Level string `json:"level"`
+		Msg   string `json:"msg"`
+	}
+
+	var jl jsonLog
+	if err := json.Unmarshal(text, &jl); err != nil {
+		logrus.Errorf("failed to decode %q to json: %+v", text, err)
 		return
 	}
+
+	lvl, err := logrus.ParseLevel(jl.Level)
+	if err != nil {
+		logrus.Errorf("failed to parse log level %q: %v\n", jl.Level, err)
+		return
+	}
+	log(lvl, jl.Msg)
 }
 
 func log(level logrus.Level, args ...interface{}) {
