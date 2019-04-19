@@ -95,14 +95,12 @@ struct nlconfig_t {
 	size_t gidmappath_len;
 };
 
-typedef enum {
-	PANIC = 0,
-	FATAL,
-	ERROR,
-	WARNING,
-	INFO,
-	DEBUG,
-} loglevel_t;
+#define PANIC   "panic"
+#define FATAL   "fatal"
+#define ERROR   "error"
+#define WARNING "warning"
+#define INFO    "info"
+#define DEBUG   "debug"
 
 int logfd;
 
@@ -363,20 +361,18 @@ static int initpipe(void)
 	return pipenum;
 }
 
-static int logpipe(void)
+static void setup_logpipe(void)
 {
-	int pipenum;
 	char *logpipe, *endptr;
 
 	logpipe = getenv("_LIBCONTAINER_LOGPIPE");
 	if (logpipe == NULL || *logpipe == '\0')
-		return -1;
+		bail("unable to get _LIBCONTAINER_LOGPIPE env var");
 
-	pipenum = strtol(logpipe, &endptr, 10);
-	if (*endptr != '\0')
+	logfd = strtol(logpipe, &endptr, 10);
+	if (logpipe == endptr || *endptr != '\0')
 		bail("unable to parse _LIBCONTAINER_LOGPIPE");
 
-	return pipenum;
 }
 
 /* Returns the clone(2) flag for a namespace, given the name of a namespace. */
@@ -564,30 +560,21 @@ void join_namespaces(char *nslist)
 /* Defined in cloned_binary.c. */
 extern int ensure_cloned_binary(void);
 
-void write_log(loglevel_t level, const char *format, ...)
+void write_log(const char *level, const char *format, ...)
 {
-	static const char *strlevel[] = {"panic", "fatal", "error", "warning", "info", "debug"};
-	static char jsonbuffer[1024];
-	int len, written;
+	static char message[1024];
 	va_list args;
-	if (logfd < 0 || level >= sizeof(strlevel) / sizeof(strlevel[0])) {
-		return;
-	}
 
-	len = snprintf(jsonbuffer, sizeof(jsonbuffer),
-				   "{\"level\":\"%s\", \"msg\": \"", strlevel[level]);
-	if (len < 0) return;
+	if (logfd < 0 || level == NULL)
+		return;
 
 	va_start(args, format);
-	written = vsnprintf(&jsonbuffer[len], sizeof(jsonbuffer) - len, format, args);
-	if (written < 0) return;
-	len += written;
+	if (vsnprintf(message, 1024, format, args) < 0)
+		return;
 	va_end(args);
 
-	written = snprintf(&jsonbuffer[len], sizeof(jsonbuffer) - len, "\"}\n");
-	if (written < 0) return;
-	len += written;
-	write(logfd, jsonbuffer, len);
+	if (dprintf(logfd, "{\"level\":\"%s\", \"msg\": \"%s\"}\n", level, message) < 0)
+		return;
 }
 
 void nsexec(void)
@@ -613,8 +600,7 @@ void nsexec(void)
 	if (ensure_cloned_binary() < 0)
 		bail("could not ensure we are a cloned binary");
 
-	/* Get the log pipe */
-	logfd = logpipe();
+	setup_logpipe();
 
 	write_log(DEBUG, "%s started", __FUNCTION__);
 
