@@ -367,7 +367,7 @@ static void setup_logpipe(void)
 
 	logpipe = getenv("_LIBCONTAINER_LOGPIPE");
 	if (logpipe == NULL || *logpipe == '\0')
-		bail("unable to get _LIBCONTAINER_LOGPIPE env var");
+		return;
 
 	logfd = strtol(logpipe, &endptr, 10);
 	if (logpipe == endptr || *endptr != '\0')
