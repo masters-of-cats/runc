@@ -140,6 +140,26 @@ int setns(int fd, int nstype)
 }
 #endif
 
+void write_log_with_info(const char *level, const char *function, int line, const char *format, ...)
+{
+	static char message[1024];
+	va_list args;
+
+	if (logfd < 0 || level == NULL)
+		return;
+
+	va_start(args, format);
+	if (vsnprintf(message, 1024, format, args) < 0)
+		return;
+	va_end(args);
+
+	if (dprintf(logfd, "{\"level\":\"%s\", \"msg\": \"%s:%d %s\"}\n", level, function, line, message) < 0)
+		return;
+}
+
+#define write_log(level, fmt, ...) \
+	write_log_with_info(level, __FUNCTION__, __LINE__, fmt, ##__VA_ARGS__)
+
 /* XXX: This is ugly. */
 static int syncfd = -1;
 
@@ -147,13 +167,13 @@ static int syncfd = -1;
 #define bail(fmt, ...)								\
 	do {									\
 		int ret = __COUNTER__ + 1;					\
-		fprintf(stderr, "nsenter: " fmt ": %m\n", ##__VA_ARGS__);	\
+		write_log(DEBUG, "nsenter: " fmt ": %m\n", ##__VA_ARGS__);	\
 		if (syncfd >= 0) {						\
 			enum sync_t s = SYNC_ERR;				\
 			if (write(syncfd, &s, sizeof(s)) != sizeof(s))		\
-				fprintf(stderr, "nsenter: failed: write(s)");	\
+				write_log(DEBUG, "nsenter: failed: write(s)");	\
 			if (write(syncfd, &ret, sizeof(ret)) != sizeof(ret))	\
-				fprintf(stderr, "nsenter: failed: write(ret)");	\
+				write_log(DEBUG, "nsenter: failed: write(ret)");	\
 		}								\
 		exit(ret);							\
 	} while(0)
@@ -366,12 +386,14 @@ static void setup_logpipe(void)
 	char *logpipe, *endptr;
 
 	logpipe = getenv("_LIBCONTAINER_LOGPIPE");
-	if (logpipe == NULL || *logpipe == '\0')
+	if (logpipe == NULL || *logpipe == '\0') {
+		logfd = -1;
 		return;
+	}
 
 	logfd = strtol(logpipe, &endptr, 10);
 	if (logpipe == endptr || *endptr != '\0')
-		bail("unable to parse _LIBCONTAINER_LOGPIPE");
+		fprintf(stderr, "unable to parse _LIBCONTAINER_LOGPIPE, value: %s", logpipe);
 
 }
 
@@ -560,23 +582,6 @@ void join_namespaces(char *nslist)
 /* Defined in cloned_binary.c. */
 extern int ensure_cloned_binary(void);
 
-void write_log(const char *level, const char *format, ...)
-{
-	static char message[1024];
-	va_list args;
-
-	if (logfd < 0 || level == NULL)
-		return;
-
-	va_start(args, format);
-	if (vsnprintf(message, 1024, format, args) < 0)
-		return;
-	va_end(args);
-
-	if (dprintf(logfd, "{\"level\":\"%s\", \"msg\": \"%s\"}\n", level, message) < 0)
-		return;
-}
-
 void nsexec(void)
 {
 	int pipenum;
@@ -592,6 +597,8 @@ void nsexec(void)
 	if (pipenum == -1)
 		return;
 
+	setup_logpipe();
+
 	/*
 	 * We need to re-exec if we are not in a cloned binary. This is necessary
 	 * to ensure that containers won't be able to access the host binary
@@ -600,9 +607,7 @@ void nsexec(void)
 	if (ensure_cloned_binary() < 0)
 		bail("could not ensure we are a cloned binary");
 
-	setup_logpipe();
-
-	write_log(DEBUG, "%s started", __FUNCTION__);
+	write_log(DEBUG, "nsexec started");
 
 	/* Parse all of the netlink configuration. */
 	nl_parse(pipenum, &config);
